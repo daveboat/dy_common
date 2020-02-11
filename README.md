@@ -1,1 +1,1 @@
-A repo of some code that I commonly re-use in my projects.
+A repo of some code that I re-use in my projects.
