@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 from torchvision.models import alexnet
-from dy_common.pytorch_helpers.gaussiansmoothing import GaussianSmoothing
+from .gaussiansmoothing import GaussianSmoothing
 
 
 def cnn_visualize(model, device, class_index, input_height=224, input_width=224, channels=3, iterations=5000, lr=0.1,
