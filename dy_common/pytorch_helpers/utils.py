@@ -1,6 +1,7 @@
 import random
 import torch
 
+
 def dataset_resample(data_dict, class_list, sample_distribution):
     """
     Takes an input dict (data_dict), with dictionary values being the class labels, and returns a list of (key, value)
@@ -52,6 +53,7 @@ def dataset_resample(data_dict, class_list, sample_distribution):
 
     return resampled_list
 
+
 def write_histograms(writer, model, epoch):
     """
     A function to write histograms of all model weights, biases, weight gradients, and bias gradients to a
@@ -81,3 +83,57 @@ def write_histograms(writer, model, epoch):
             if module.bias is not None:
                 writer.add_histogram('linear/biases/' + name + '.bias', module.bias, epoch)
                 writer.add_histogram('linear/gradients/' + name + '.bias.grad', module.bias.grad, epoch)
+
+
+def warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor):
+    """
+    Warmup LR scheduler, from https://github.com/pytorch/vision/blob/master/references/detection/utils.py
+
+    This returns a LambdaLR, which multiplies the original LR by a factor given here by f(epoch). Since, in our usage,
+    the epoch increments when we call lr_scheduler.step(), this LR should iterate every batch of the first epoch instead
+    of every epoch.
+
+    With the usage below, LR will go from ~0 to the lr of the optimizer, in either 1000 increments, or len(data_loader)
+    increments, depending on which is smaller.
+
+    Usage:
+    train_one_epoch(..., data_loader, epoch, ...):
+        ...
+        lr_scheduler = None
+        if epoch == 0:
+            print('Starting warmup epoch...')
+            warmup_factor = 1. / 1000
+            warmup_iters = min(1000, len(data_loader) - 1)
+
+            lr_scheduler = utils.warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor)
+        ...
+        for batch in data_loader:
+            ...
+            if lr_scheduler is not None:
+                lr_scheduler.step()
+            ...
+    """
+
+    def f(x):
+        if x >= warmup_iters:
+            return 1
+        alpha = float(x) / warmup_iters
+        return warmup_factor * (1 - alpha) + alpha
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, f)
+
+
+if __name__ == '__main__':
+    p = torch.tensor([1])
+    optimizer = torch.optim.SGD(params=[p], lr=1)
+
+    # a test to see how warmup_lr_scheduler works
+    data_loader_len = 500
+    warmup_factor = 1./1000
+    warmup_iters = min(1000, data_loader_len - 1)
+
+    lr_scheduler = warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor)
+
+    for i in range(data_loader_len):
+        lr_scheduler.step()
+        print(optimizer.param_groups[0]['lr'])
