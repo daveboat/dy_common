@@ -1,4 +1,12 @@
 import re
+import numpy as np
+
+
+def loguniform(low=0, high=1, size=None, base=np.e):
+    """
+    Works like np.random.uniform, but with a log-uniform distribution
+    """
+    return np.power(base, np.random.uniform(low, high, size))
 
 
 def convert_seconds_to_hms(seconds):
