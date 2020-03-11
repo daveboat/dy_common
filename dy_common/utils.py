@@ -2,6 +2,22 @@ import re
 import numpy as np
 
 
+def parse_sample_distribution(sample_distribution_string):
+    """
+    Takes a string in the form 'int,int,int,int, ...', and parses it into a tuple (int, int, int, int, ...)
+    """
+
+    sample_distribution_string = sample_distribution_string.strip()
+    sample_distribution = sample_distribution_string.split(',')
+    try:
+        sample_distribution = [int(x) for x in sample_distribution]
+    except:
+        print('Unable to parse sample distribution {}'.format(sample_distribution_string))
+        sample_distribution = []
+
+    return tuple(sample_distribution)
+
+
 def loguniform(low=0, high=1, size=None, base=np.e):
     """
     Works like np.random.uniform, but with a log-uniform distribution
