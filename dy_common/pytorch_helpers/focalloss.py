@@ -107,7 +107,7 @@ def focal_loss(input, target, gamma=1, eps=1e-7, with_logits=True, ignore_index=
 
     # batch reduction
     if reduction == 'mean':
-        return torch.sum(loss, dim=-1)
+        return torch.mean(loss, dim=-1)
     elif reduction == 'sum':
         return torch.sum(loss, dim=-1)
     else:  # 'none'

@@ -84,6 +84,7 @@ def cnn_visualize(model, device, class_index, input_height=224, input_width=224,
     image = (image - imgmin)/(imgmax - imgmin)
     return image
 
+
 if __name__ == '__main__':
     device = torch.device('cpu' if not torch.cuda.is_available() else 'cuda')
 
