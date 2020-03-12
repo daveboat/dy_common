@@ -49,7 +49,7 @@ class FocalLoss(nn.Module):
 
     batch behaviour: reduction = 'none', 'mean', 'sum'
     """
-    def __init__(self, gamma=1, eps=1e-7, with_logits=True, ignore_index=-100, reduction='mean'):
+    def __init__(self, gamma=1, eps=1e-7, with_logits=True, ignore_index=-100, reduction='mean', smooth_eps=None):
         super().__init__()
 
         assert reduction in ['none', 'mean', 'sum'], 'FocalLoss: reduction must be one of [\'none\', \'mean\', \'sum\']'
@@ -59,11 +59,14 @@ class FocalLoss(nn.Module):
         self.with_logits = with_logits
         self.ignore_index = ignore_index
         self.reduction = reduction
+        self.smooth_eps = smooth_eps
 
     def forward(self, input, target):
-        return focal_loss(input, target, self.gamma, self.eps, self.with_logits, self.ignore_index, self.reduction)
+        return focal_loss(input, target, self.gamma, self.eps, self.with_logits, self.ignore_index, self.reduction,
+                          smooth_eps=self.smooth_eps)
 
-def focal_loss(input, target, gamma=1, eps=1e-7, with_logits=True, ignore_index=-100, reduction='mean'):
+def focal_loss(input, target, gamma=1, eps=1e-7, with_logits=True, ignore_index=-100, reduction='mean',
+               smooth_eps=None):
     """
     A function version of focal loss, meant to be easily swappable with F.cross_entropy. The equation implemented here
     is L_{focal} = - \sum (1 - p_{target})^\gamma p_{target} \log p_{pred}
@@ -78,7 +81,15 @@ def focal_loss(input, target, gamma=1, eps=1e-7, with_logits=True, ignore_index=
 
     batch behaviour: reduction = 'none', 'mean', 'sum'
     """
+    smooth_eps = smooth_eps or 0
+
+    # make target
     y = F.one_hot(target, input.size(-1))
+
+    # apply label smoothing according to target = [eps/K, eps/K, ..., (1-eps) + eps/K, eps/K, eps/K, ...]
+    if smooth_eps > 0:
+        y = y * (1 - smooth_eps) + smooth_eps/y.size(-1)
+
     if with_logits:
         pt = F.softmax(input, dim=-1)
     else:
@@ -96,11 +107,12 @@ def focal_loss(input, target, gamma=1, eps=1e-7, with_logits=True, ignore_index=
 
     # batch reduction
     if reduction == 'mean':
-        return torch.mean(loss, dim=-1)
+        return torch.sum(loss, dim=-1)
     elif reduction == 'sum':
         return torch.sum(loss, dim=-1)
     else:  # 'none'
         return loss
+
 
 if __name__ == '__main__':
     torch.manual_seed(0)
@@ -127,3 +139,7 @@ if __name__ == '__main__':
     target2 = torch.tensor([1, 8, 5, 1, 9])
     print(focal_loss(input, target2, ignore_index=1, reduction='none'))
     print(focal_loss(input, target2, ignore_index=1, reduction='mean'))
+
+    # test FocalLoss with label smoothing
+    fl_smooth = FocalLoss(gamma=1, with_logits=True, smooth_eps=0.1, reduction='none')
+    print(fl_smooth(input, target))
