@@ -13,6 +13,8 @@ def dataset_resample(data_dict, class_list, sample_distribution):
 
     If class_list = None, assume that class_list = range(len(sample_distribution))
 
+    If sample_distribution is negative for a class, then those samples are not resampled, and the entire list is used
+
     For example:
     class_list = ['classa', 'classb', 'classc']
     sample_distribution = (1000, 800, 800)
@@ -40,7 +42,9 @@ def dataset_resample(data_dict, class_list, sample_distribution):
     # don't use replacement
     resampled_class_lists = [[] for _ in range(num_classes)]
     for i in range(num_classes):
-        if sample_distribution[i] > len(class_lists[i]):
+        if sample_distribution[i] < 0:
+            resampled_class_lists[i] = class_lists[i].copy()
+        elif sample_distribution[i] > len(class_lists[i]):
             resampled_class_lists[i] = random.choices(class_lists[i], k=sample_distribution[i])
         else:
             resampled_class_lists[i] = random.sample(class_lists[i], k=sample_distribution[i])
