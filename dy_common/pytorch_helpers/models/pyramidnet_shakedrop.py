@@ -128,10 +128,11 @@ class Bottleneck(nn.Module):
 
 class PyramidNet_ShakeDrop(nn.Module):
 
-    def __init__(self, depth, alpha, num_classes, bottleneck=False, return_feat=False):
+    def __init__(self, depth, alpha, num_classes, in_channels=3, bottleneck=False, return_feat=False):
         super().__init__()
 
         self.return_feat = return_feat  # might want to return the feature vector for some applications
+        self.in_channels = in_channels
 
         blocks = {18: BasicBlock, 34: BasicBlock, 50: Bottleneck, 101: Bottleneck, 152: Bottleneck, 200: Bottleneck}
         layers = {18: [2, 2, 2, 2], 34: [3, 4, 6, 3], 50: [3, 4, 6, 3], 101: [3, 4, 23, 3], 152: [3, 8, 36, 3],
@@ -160,7 +161,8 @@ class PyramidNet_ShakeDrop(nn.Module):
 
         self.input_featuremap_dim = self.inplanes
         # down1
-        self.conv1 = nn.Conv2d(3, self.input_featuremap_dim, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(self.in_channels, self.input_featuremap_dim, kernel_size=7, stride=2, padding=3,
+                               bias=False)
         self.bn1 = nn.BatchNorm2d(self.input_featuremap_dim)
         self.relu = nn.ReLU(inplace=True)
         # down2
