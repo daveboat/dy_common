@@ -221,7 +221,6 @@ class PyramidNet_ShakeDrop(nn.Module):
         x = self.relu_final(x)
         x = self.avgpool(x)
         feat = x.view(x.size(0), -1)
-        print(feat.size())
         x = self.fc(feat)
         if self.return_feat:
             return x, feat
