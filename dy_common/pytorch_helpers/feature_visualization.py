@@ -65,6 +65,8 @@ def feature_visualizer(features, labels, visualization_dim=2, method='pca', outp
     elif output == 'save':
         plt.savefig(output_file, format='png')
 
+    return fig
+
 if __name__ == '__main__':
     np.random.seed(42)
 
