@@ -104,6 +104,9 @@ class VideoDataset(torch.utils.data.Dataset):
         if self.random_horizontal_flip and random.random() < 0.5:
             frames = self._horizontal_flip(frames)
 
+        # swap axes to pytorch CDHW format
+        frames = np.transpose(frames, axes=(3, 0, 1, 2))
+
         # convert frames and label to tensors and return
         return torch.from_numpy(frames), torch.as_tensor(class_index, dtype=torch.int64)
 
@@ -160,7 +163,8 @@ class VideoDataset(torch.utils.data.Dataset):
         """
 
         # a horizontal flip corresponds to reversing indices on the width index
-        return frames[:, :, ::-1, :]
+        # need to do the extra operation because torch.from_numpy doesn't support negative strides (i.e. the ::-1)
+        return np.ascontiguousarray(frames[:, :, ::-1, :])
 
     def _image_resize(self, image, l, inter=cv2.INTER_LINEAR):
         """
