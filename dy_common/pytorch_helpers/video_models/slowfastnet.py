@@ -70,7 +70,7 @@ class Bottleneck(nn.Module):
 
 
 class SlowFast(nn.Module):
-    def __init__(self, block=Bottleneck, layers=[3, 4, 6, 3], class_num=10, dropout=0.5, stride=2):
+    def __init__(self, block=Bottleneck, layers=[3, 4, 6, 3], num_classes=10, dropout=0.5, stride=2):
         super().__init__()
 
         # DY: Make strides configurable. Model architecture requires fast_stride = slow_stride / 8
@@ -104,7 +104,7 @@ class SlowFast(nn.Module):
         self.slow_res4 = self._make_layer_slow(block, 256, layers[2], stride=2, head_conv=3)
         self.slow_res5 = self._make_layer_slow(block, 512, layers[3], stride=2, head_conv=3)
         self.dp = nn.Dropout(dropout)
-        self.fc = nn.Linear(self.fast_inplanes + 2048, class_num, bias=False)
+        self.fc = nn.Linear(self.fast_inplanes + 2048, num_classes, bias=False)
 
     def forward(self, input):
         fast, lateral = self.FastPath(input[:, :, ::self.stride, :, :])
