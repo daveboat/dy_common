@@ -127,6 +127,25 @@ def warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor):
     return torch.optim.lr_scheduler.LambdaLR(optimizer, f)
 
 
+def load_state_dict_lenient(model, state_dict):
+    """
+    A function which tries to load state_dict into model. If it fails, then try to load any state dict entries which
+    have the same name and shape as the model's state dict.
+    """
+
+    try:
+        model.load_state_dict(state_dict)
+    except:
+        print('Warning: Name and/or shape mismatch when loading state dict. Attempting to load only matching entries.')
+        model_dict = model.state_dict()
+        filtered_state_dict = {k: v for k, v in state_dict.items() if
+                               (k in model_dict) and (model_dict[k].shape == state_dict[k].shape)}
+        load_state_dict_result = model.load_state_dict(filtered_state_dict, strict=False)
+
+        print('Loaded state dict. Missing keys: {}, unexpected keys: {}'.format(load_state_dict_result.missing_keys,
+                                                                                load_state_dict_result.unexpected_keys))
+
+
 if __name__ == '__main__':
     p = torch.tensor([1])
     optimizer = torch.optim.SGD(params=[p], lr=1)
