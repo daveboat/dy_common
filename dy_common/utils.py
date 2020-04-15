@@ -2,6 +2,14 @@ import re
 import numpy as np
 
 
+def blank(x, *args, **kwargs):
+    """
+    A blank function which just returns its first argument, and can take any number of other arguments or keyword
+    arguments.
+    """
+    return x
+
+
 def parse_sample_distribution(sample_distribution_string):
     """
     Takes a string in the form 'int,int,int,int, ...', and parses it into a tuple (int, int, int, int, ...)

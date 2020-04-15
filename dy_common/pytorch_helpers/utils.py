@@ -2,6 +2,16 @@ import random
 import torch
 
 
+def get_cuda_memory_usage():
+    """
+    Returns current memory usage as a list as a list across all devices, and max memory usage as a list across all
+    devices
+    """
+    bytes_to_gb = 1e-9
+    return [torch.cuda.memory_allocated(device=idx) * bytes_to_gb for idx in range(torch.cuda.device_count())], \
+           [torch.cuda.max_memory_allocated(device=idx) * bytes_to_gb for idx in range(torch.cuda.device_count())]
+
+
 def dataset_resample(data_dict, class_list, sample_distribution):
     """
     Takes an input dict (data_dict), with dictionary values being the class labels, and returns a list of (key, value)

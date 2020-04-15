@@ -2,11 +2,228 @@
 A video dataset for pytorch, using opencv to load and rescale the videos
 """
 
+import math
 import os
 import torch
 import random
 import cv2
 import numpy as np
+
+
+def uniform_sample(video_tensor, sample_len, num_samples):
+    """
+    Given a 5D video tensor (NCDHW), take num_samples samples of sample_len length, distributed uniformly from beginning
+    to end, keeping all other dimensions the same
+
+    Returns a list of sampled clips
+    """
+    # get the frame length of the tensor, which is dimension 2
+    video_len = video_tensor.size(2)
+
+    # this simple algorithm runs into trouble if I have num_samples or sample_len >= length of the video tensor, so
+    # we should check for this
+    assert video_len > sample_len and video_len > num_samples, \
+        'uniform_sample(): Video length ({}) should be greater than both sample length ({}) and number of samples ({})'.format(video_len, sample_len, num_samples)
+
+    start = max(video_len // (num_samples + 1) - math.ceil(sample_len / 2), 0)
+    stride = round((video_len - start) / (num_samples + 1))
+    overshoot = start + (num_samples - 1) * stride + sample_len - video_len
+    if overshoot > 0:
+        stride -= math.ceil(overshoot/(num_samples - 1))
+
+    outlist = []
+    for i in range(num_samples):
+        clip = video_tensor[:, :, start + i * stride:start + i * stride + sample_len, :, :]
+
+        # this should always pass as long as video_len > sample_len and video_len > num_samples, but check anyways
+        if clip.size(2) == sample_len:
+            outlist.append(clip)
+
+    return outlist
+
+
+def uniform_crop(video_tensor, crop_size, num_crops):
+    """
+    Given a 5D video tensor (NCDHW), take num_crops crops of square size crop_size*crop_size, uniformly along the longer
+    spatial dimension. If num_crops == 1, a center crop should be taken
+    """
+    # get the height and width of the video
+    video_height = video_tensor.size(3)
+    video_width = video_tensor.size(4)
+
+    # make sure crop size is not equal or larger than the smaller of the two video dimensions
+    assert crop_size <= min(video_height, video_width), \
+        'uniform_crop(): crop size ({}) must be smaller than or equal to both video width ({}) and video height ({})'.format(crop_size, video_width, video_height)
+
+    # make crops for when h > w and for when w > h
+    outlist = []
+    if video_height > video_width:  # in this situation, we sample along height and center crop along width
+        start = max(video_height // (num_crops + 1) - math.ceil(crop_size / 2), 0)
+        stride = round((video_height - start) / (num_crops + 1))
+        overshoot = start + (num_crops - 1) * stride + crop_size - video_height
+        if overshoot > 0:
+            stride -= math.ceil(overshoot/(num_crops - 1))
+
+        for i in range(num_crops):
+            clip = video_tensor[:, :, :, start + i * stride:start + i * stride + crop_size, int((video_width - crop_size)/2):int((video_width - crop_size)/2) + crop_size]
+            outlist.append(clip)
+
+    else:  # in this situation, we sample along width and center crop along height. If height and width are equal, default to sampling along width since more interesting details tend to be along the landscape direction
+        start = max(video_width // (num_crops + 1) - math.ceil(crop_size / 2), 0)
+        stride = round((video_width - start) / (num_crops + 1))
+        overshoot = start + (num_crops - 1) * stride + crop_size - video_width
+        if overshoot > 0:
+            stride -= math.ceil(overshoot/(num_crops - 1))
+
+        for i in range(num_crops):
+            clip = video_tensor[:, :, :, int((video_height - crop_size) / 2):int((video_height - crop_size) / 2) + crop_size, start + i * stride:start + i * stride + crop_size]
+            outlist.append(clip)
+
+    return outlist
+
+
+def random_sample(frames, sample_length):
+    """
+    Samples a random sequence of sample_length frames from frames. Frames are assumed to be in DHWC order
+    """
+
+    frame_length = frames.shape[0]
+
+    # if, for some reason, we request more samples than there are frames, just return the entire video, with a
+    # warning
+    if sample_length >= frame_length:
+        print('Warning - VideoDataset._random_sample(): sample_length ({}) >= frame_length ({})'.format(sample_length,
+                                                                                                        frame_length))
+        return frames
+    else:
+        start_frame = random.randint(0, frame_length - sample_length)
+
+        return frames[start_frame:start_frame + sample_length, :, :, :]
+
+
+def random_crop(frames, crop_size):
+    """
+    Perform a random crop of the video of crop_size x crop_size. Frames are assumed to be in DHWC order
+    """
+
+    # get frame height and width. The frame is in order [1, frames, height, width, channels]
+    frame_height = frames.shape[1]
+    frame_width = frames.shape[2]
+
+    # randomly crop by choosing a number from 0 to frame_height/width - 224
+    height_start = random.randint(0, frame_height - crop_size)
+    width_start = random.randint(0, frame_width - crop_size)
+
+    return frames[:, height_start:height_start + crop_size, width_start:width_start + crop_size, :]
+
+
+def center_crop(frames, crop_size):
+    """
+    Perform a center crop of the video of crop_size x crop_size. Frames are assumed to be in DHWC order
+    """
+    # get frame height and width. The frame is in order [frames, height, width, channels]
+    frame_height = frames.shape[1]
+    frame_width = frames.shape[2]
+
+    # return a center crop
+    return frames[:, :, int((frame_height - crop_size)/2):int((frame_height - crop_size)/2) + crop_size, int((frame_width - crop_size)/2):int((frame_width - crop_size)/2) + crop_size, :]
+
+
+def horizontal_flip(frames):
+    """
+    Perform a horizontal flip of the video. Frames are assumed to be an np.array in DHWC order
+    """
+
+    # a horizontal flip corresponds to reversing indices on the width index
+    # need to do the extra operation because torch.from_numpy doesn't support negative strides (i.e. the ::-1)
+    return np.ascontiguousarray(frames[:, :, ::-1, :])
+
+
+def image_resize(image, l, inter=cv2.INTER_LINEAR):
+    """
+    Resize an image, preseving aspect ratio, so that its smaller edge is l
+
+    Returns the resized image
+    """
+
+    # initialize the dimensions of the image to be resized and grab the image size.
+    # we assume the image is in opencv and np's HWC format
+    (h, w) = image.shape[:2]
+
+    # operate with h if h <= w, else operate with w
+    if h <= w:
+        dim = (int(w * l / h), l)
+    else:
+        dim = (l, int(h * l / w))
+
+    # resize the image
+    resized = cv2.resize(image, dim, interpolation=inter)
+
+    return resized
+
+
+
+def loop_list(frame_list, num_frames):
+    """
+    Fill a list by appending elements from it in a loop it until it has num_frames elements
+    """
+
+    original_list_length = len(frame_list)  # original length of the list
+    list_counter = 0  # which element of the list we are on
+
+    # append to list in a loop until we reach num_frames
+    while len(frame_list) < num_frames:
+        frame_list.append(frame_list[list_counter])
+        list_counter += 1
+        if list_counter >= original_list_length:
+            list_counter = 0
+
+
+def load_video(filename, resize_len, min_video_len):
+    """
+    Load a video, rescaling the shorter dimension to self.rescale_size, and returning as a DHWC numpy array, with
+    pixels rescaled between 0 and 1. This returns the full video. If necessary, video frames are looped until the
+    resulting array has self.min_video_len frames.
+    """
+
+    # Load video and open frame by frame
+    cap = cv2.VideoCapture(filename)
+
+    # initialize frame list
+    frame_list = []
+
+    # Read until video is completed
+    while (cap.isOpened()):
+        # Capture frame-by-frame
+        ret, frame = cap.read()
+        if ret:
+            # convert frame to RGB
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # resize frame, preserving aspect ratio, so that its smaller edge is correctly sized
+            resized = image_resize(frame, resize_len)
+
+            # rescale pixes to [0, 1]
+            resized = resized / 255
+
+            # add frame to list
+            frame_list.append(resized)
+        else:
+            # end of video
+            break
+
+    # release the video capture object
+    cap.release()
+
+    # if the number of frames we have is less than self.min_video_len, fill the list by looping the video
+    if min_video_len is not None and len(frame_list) < min_video_len:
+        loop_list(frame_list, min_video_len)
+
+    # convert to np array
+    frames = np.array(frame_list, dtype=np.float32)
+
+    # returns in DHWC, np,array, np.float32 format
+    return frames
 
 
 class VideoDataset(torch.utils.data.Dataset):
@@ -114,140 +331,19 @@ class VideoDataset(torch.utils.data.Dataset):
         return len(self.data_list)
 
     def _random_sample(self, frames, sample_length):
-        """
-        Samples a random sequence of sample_length frames from frames. Frames are assumed to be in DHWC order
-        """
-
-        frame_length = frames.shape[0]
-
-        # if, for some reason, we request more samples than there are frames, just return the entire video, with a
-        # warning
-        if sample_length >= frame_length:
-            print('Warning - VideoDataset._random_sample(): sample_length ({}) >= frame_length ({})'.format(sample_length,
-                                                                                                            frame_length))
-            return frames
-        else:
-            start_frame = random.randint(0, frame_length - sample_length)
-
-            return frames[start_frame:start_frame + sample_length, :, :, :]
+        return random_sample(frames, sample_length)
 
     def _random_crop(self, frames, crop_size):
-        """
-        Perform a random crop of the video of crop_size x crop_size. Frames are assumed to be in DHWC order
-        """
-
-        # get frame height and width. The frame is in order [1, frames, height, width, channels]
-        frame_height = frames.shape[1]
-        frame_width = frames.shape[2]
-
-        # randomly crop by choosing a number from 0 to frame_height/width - 224
-        height_start = random.randint(0, frame_height - crop_size)
-        width_start = random.randint(0, frame_width - crop_size)
-
-        return frames[:, height_start:height_start + crop_size, width_start:width_start + crop_size, :]
+        return random_crop(frames, crop_size)
 
     def _center_crop(self, frames, crop_size):
-        """
-        Perform a center crop of the video of crop_size x crop_size. Frames are assumed to be in DHWC order
-        """
-        # get frame height and width. The frame is in order [frames, height, width, channels]
-        frame_height = frames.shape[1]
-        frame_width = frames.shape[2]
-
-        # return a center crop
-        return frames[:, :, int((frame_height - crop_size)/2):int((frame_height - crop_size)/2) + crop_size, int((frame_width - crop_size)/2):int((frame_width - crop_size)/2) + crop_size, :]
+        return center_crop(frames, crop_size)
 
     def _horizontal_flip(self, frames):
-        """
-        Perform a horizontal flip of the video. Frames are assumed to be an np.array in DHWC order
-        """
-
-        # a horizontal flip corresponds to reversing indices on the width index
-        # need to do the extra operation because torch.from_numpy doesn't support negative strides (i.e. the ::-1)
-        return np.ascontiguousarray(frames[:, :, ::-1, :])
-
-    def _image_resize(self, image, l, inter=cv2.INTER_LINEAR):
-        """
-        Resize an image, preseving aspect ratio, so that its smaller edge is l
-
-        Returns the resized image
-        """
-
-        # initialize the dimensions of the image to be resized and grab the image size.
-        # we assume the image is in opencv and np's HWC format
-        (h, w) = image.shape[:2]
-
-        # operate with h if h <= w, else operate with w
-        if h <= w:
-            dim = (int(w * l / h), l)
-        else:
-            dim = (l, int(h * l / w))
-
-        # resize the image
-        resized = cv2.resize(image, dim, interpolation=inter)
-
-        return resized
-
-    def _loop_list(self, frame_list, num_frames):
-        """
-        Fill a list by appending elements from it in a loop it until it has num_frames elements
-        """
-
-        original_list_length = len(frame_list)  # original length of the list
-        list_counter = 0  # which element of the list we are on
-
-        # append to list in a loop until we reach num_frames
-        while len(frame_list) < num_frames:
-            frame_list.append(frame_list[list_counter])
-            list_counter += 1
-            if list_counter >= original_list_length:
-                list_counter = 0
+        return horizontal_flip(frames)
 
     def _load_video(self, filename, resize_len, min_video_len):
-        """
-        Load a video, rescaling the shorter dimension to self.rescale_size, and returning as a DHWC numpy array, with
-        pixels rescaled between 0 and 1. This returns the full video. If necessary, video frames are looped until the
-        resulting array has self.min_video_len frames.
-        """
-
-        # Load video and open frame by frame
-        cap = cv2.VideoCapture(filename)
-
-        # initialize frame list
-        frame_list = []
-
-        # Read until video is completed
-        while (cap.isOpened()):
-            # Capture frame-by-frame
-            ret, frame = cap.read()
-            if ret:
-                # convert frame to RGB
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-                # resize frame, preserving aspect ratio, so that its smaller edge is correctly sized
-                resized = self._image_resize(frame, resize_len)
-
-                # rescale pixes to [0, 1]
-                resized = resized / 255
-
-                # add frame to list
-                frame_list.append(resized)
-            else:
-                # end of video
-                break
-
-        # release the video capture object
-        cap.release()
-
-        # if the number of frames we have is less than self.min_video_len, fill the list by looping the video
-        if min_video_len is not None and len(frame_list) < min_video_len:
-            self._loop_list(frame_list, min_video_len)
-
-        # convert to np array
-        frames = np.array(frame_list, dtype=np.float32)
-
-        # returns in DHWC, np,array, np.float32 format
-        return frames
+        return load_video(filename, resize_len, min_video_len)
 
 
 if __name__ == '__main__':
