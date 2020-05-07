@@ -280,6 +280,7 @@ class VideoDataset(torch.utils.data.Dataset):
         for filename in data_dict.keys():
             if not os.path.isfile(filename):
                 print('Missing file: {}'.format(filename))
+                no_missing_files = False
         assert no_missing_files, 'VideoDataset(): Some files in the provided dictionary could not be found.'
 
         self.data_list = list(data_dict.items())
