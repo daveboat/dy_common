@@ -162,7 +162,6 @@ def image_resize(image, l, inter=cv2.INTER_LINEAR):
     return resized
 
 
-
 def loop_list(frame_list, num_frames):
     """
     Fill a list by appending elements from it in a loop it until it has num_frames elements
