@@ -18,8 +18,8 @@ def feature_visualizer(features, labels, visualization_dim=2, method='pca', outp
 
     features: an iterable of feature arrays (numpy array or list)
     labels: an iterable of labels. Can be integer labels or strings. If integer labels, the labels are expected to
-    start at 0 and and at the number of classes - 1. If string labels, will be automatically converted to integers
-    using unique string labels in no particular order
+    start at 0 and end at the number of classes - 1. If string labels, will be automatically converted to integers
+    using unique string labels in no particular order. These labels are for plotting purposes.
     visualization_dim: One of [2, 3]
     method: one of ['pca', 'tsne']
     output: one of ['display', 'save]
@@ -66,6 +66,7 @@ def feature_visualizer(features, labels, visualization_dim=2, method='pca', outp
         plt.savefig(output_file, format='png')
 
     return fig
+
 
 if __name__ == '__main__':
     np.random.seed(42)
